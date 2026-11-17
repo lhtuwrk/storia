@@ -7,7 +7,13 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, isFirebaseConfigured, storage } from "@/lib/firebase";
+import {
+  cloudinaryConfig,
+  db,
+  isCloudinaryConfigured,
+  isFirebaseConfigured,
+  storage,
+} from "@/lib/firebase";
 import type { Category, Product, ProductDraft } from "@/lib/types";
 
 const LOCAL_KEYS = {
@@ -30,7 +36,7 @@ function writeLocal<T>(key: string, rows: T[]) {
 }
 
 export function getDataMode(): "cloud" | "local" {
-  return isFirebaseConfigured && db && storage ? "cloud" : "local";
+  return isFirebaseConfigured && db ? "cloud" : "local";
 }
 
 export function slugify(value: string) {
@@ -160,13 +166,45 @@ export async function deleteProduct(id: string) {
 export async function uploadProductImage(file: File, productId = "new"): Promise<string> {
   if (!file.type.startsWith("image/")) throw new Error("Vui lòng chọn tệp hình ảnh.");
   const blob = await compressImage(file);
-  if (getDataMode() === "local") return blobToDataUrl(blob);
-  const fileRef = ref(storage!, `products/${productId}/${Date.now()}.jpg`);
-  await uploadBytes(fileRef, blob, {
-    contentType: "image/jpeg",
-    cacheControl: "public,max-age=31536000",
-  });
-  return getDownloadURL(fileRef);
+
+  // 1. Tải lên Cloudinary nếu có cấu hình (Miễn phí 25GB, không cần thẻ)
+  if (isCloudinaryConfigured) {
+    const formData = new FormData();
+    formData.append("file", blob, `product-${productId}-${Date.now()}.jpg`);
+    formData.append("upload_preset", cloudinaryConfig.uploadPreset);
+    formData.append("folder", "tho-handmade/products");
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudinaryConfig.cloudName}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.error?.message || `Không thể tải ảnh lên Cloudinary (mã lỗi ${response.status}).`
+      );
+    }
+
+    const result = await response.json();
+    return result.secure_url;
+  }
+
+  // 2. Tải lên Firebase Storage nếu có
+  if (storage) {
+    const fileRef = ref(storage, `products/${productId}/${Date.now()}.jpg`);
+    await uploadBytes(fileRef, blob, {
+      contentType: "image/jpeg",
+      cacheControl: "public,max-age=31536000",
+    });
+    return getDownloadURL(fileRef);
+  }
+
+  // 3. Fallback: Lưu dạng data URL (Base64) - hoạt động tốt cả offline lẫn lưu trực tiếp Firestore
+  return blobToDataUrl(blob);
 }
 
 async function compressImage(file: File): Promise<Blob> {

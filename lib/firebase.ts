@@ -12,7 +12,13 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-export const isFirebaseConfigured = Object.values(firebaseConfig).every(Boolean);
+// Firebase Firestore & Authentication chỉ cần apiKey, authDomain, projectId, appId
+export const isFirebaseConfigured = Boolean(
+  firebaseConfig.apiKey &&
+  firebaseConfig.authDomain &&
+  firebaseConfig.projectId &&
+  firebaseConfig.appId
+);
 
 const firebaseApp = isFirebaseConfigured
   ? getApps().length
@@ -22,7 +28,16 @@ const firebaseApp = isFirebaseConfigured
 
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
 export const db = firebaseApp ? getFirestore(firebaseApp) : null;
-export const storage = firebaseApp ? getStorage(firebaseApp) : null;
+export const storage = firebaseApp && firebaseConfig.storageBucket ? getStorage(firebaseApp) : null;
+
+export const cloudinaryConfig = {
+  cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? "",
+  uploadPreset: process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? "",
+};
+
+export const isCloudinaryConfigured = Boolean(
+  cloudinaryConfig.cloudName && cloudinaryConfig.uploadPreset
+);
 
 export const contactConfig = {
   facebookMessengerUrl: process.env.NEXT_PUBLIC_FACEBOOK_MESSENGER_URL ?? "",
