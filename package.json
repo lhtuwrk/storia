@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "build:cf": "opennextjs-cloudflare",
+    "preview:cf": "opennextjs-cloudflare && wrangler dev",
+    "deploy:cf": "opennextjs-cloudflare && wrangler deploy"
   },
   "dependencies": {
     "firebase": "^12.19.0",
