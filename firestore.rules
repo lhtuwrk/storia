@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isActiveAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+        && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
+    }
+
+    // Public storefront: anyone may view the catalogue.
+    match /products/{productId} {
+      allow read: if true;
+      allow create, update, delete: if isActiveAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isActiveAdmin();
+    }
+
+    // Each signed-in user can read only their own admin marker.
+    // Provision this document manually from Firebase Console.
+    match /admins/{userId} {
+      allow get: if request.auth != null && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+  }
+}

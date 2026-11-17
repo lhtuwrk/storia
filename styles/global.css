@@ -1,0 +1,35 @@
+@import "./brand.css";
+@import "./product.css";
+@import "./admin.css";
+
+:root { color-scheme: light; }
+body { min-height: 100vh; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--espresso);
+  outline-offset: 3px;
+}
+
+.product-skeleton { min-height: 360px; border-radius: var(--radius); }
+.footer-admin-link { color: var(--cocoa); font-size: 11px; text-decoration: underline; text-underline-offset: 4px; }
+.footer-admin-link:hover { color: var(--espresso); }
+.yarn-swatch { display: inline-block; width: 13px; height: 13px; margin-right: 7px; border: 1px solid rgba(75,58,46,.18); border-radius: 50%; vertical-align: -2px; }
+.color-chip { display: inline-flex; align-items: center; }
+.dialog-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(45,34,26,.48); backdrop-filter: blur(3px); overflow-y: auto; }
+.editor-open { position: relative; display: block; margin: auto; }
+.admin-toast-visible { opacity: 1; transform: translateY(0); }
+.admin-login-page { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: #eee8df; }
+.admin-login-page .login-card { width: min(100%, 480px); }
+.login-brand { width: 164px; height: auto; margin-bottom: 34px; }
+.login-intro { margin: 10px 0 24px; }
+.admin-back-link { display: inline-block; margin-top: 20px; color: var(--cocoa); font-size: 11px; }
+.admin-loading { min-height: 100vh; display: grid; place-content: center; justify-items: center; gap: 15px; color: var(--cocoa); font-size: 12px; }
+.admin-loading-card { width: min(460px, calc(100vw - 40px)); height: 190px; border-radius: 20px; }
+@media (max-width: 650px) {
+  .product-skeleton { min-height: 250px; }
+  .login-brand { width: 140px; margin-bottom: 26px; }
+  .dialog-overlay { padding: 8px; }
+  .editor-open { max-height: calc(100vh - 16px); }
+}
+.admin-shell { background: #eee8df; }
+.detail-skeleton { min-height: 460px; border-radius: 22px; }
+@media (max-width: 760px) { .detail-skeleton { min-height: 300px; } }
