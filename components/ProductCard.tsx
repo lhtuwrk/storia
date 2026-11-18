@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatPrice } from "@/lib/data";
+import { displayImage } from "@/lib/product";
 import type { Product } from "@/lib/types";
 
 export default function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
@@ -13,7 +14,7 @@ export default function ProductCard({ product, index = 0 }: { product: Product; 
     <article className="product-card" style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}>
       <Link className="product-image-link" href={`/products/${encodeURIComponent(product.id)}`} aria-label={`Xem ${product.name}`}>
         {product.image ? (
-          <img className="product-image" loading="lazy" src={product.image} alt={product.name} />
+          <img className="product-image" loading="lazy" decoding="async" src={displayImage(product.image, 720)} alt={product.name} />
         ) : (
           <div className="product-placeholder"><img src="/assets/flower-mark.svg" alt="" /></div>
         )}

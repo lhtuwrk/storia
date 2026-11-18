@@ -22,7 +22,7 @@ export default function SiteHeader({ onShowroom = false }: { onShowroom?: boolea
         ) : (
           <Link href="/" aria-label="tho. handmade - Trang chủ">{logo}</Link>
         )}
-        <nav className={`header-nav ${open ? "open" : ""}`} aria-label="Điều hướng chính">
+        <nav className={`header-nav ${open ? "open" : ""}`} id="header-navigation" aria-label="Điều hướng chính">
           {sections.map(({ id, label }) => onShowroom ? (
             <a key={id} href={`#${id}`} onClick={closeMenu}>{label}</a>
           ) : (
@@ -34,6 +34,7 @@ export default function SiteHeader({ onShowroom = false }: { onShowroom?: boolea
           type="button"
           aria-label={open ? "Đóng menu" : "Mở menu"}
           aria-expanded={open}
+          aria-controls="header-navigation"
           onClick={() => setOpen((value) => !value)}
         >
           {open ? "×" : "☰"}

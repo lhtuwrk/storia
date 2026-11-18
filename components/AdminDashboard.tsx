@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import EditorDialog from "@/components/EditorDialog";
+import { validateProduct, validateImageUrl, displayImage, productImages } from "@/lib/product";
+import AmountInput from "@/components/AmountInput";
+import ProductImageInput, { type EditableImage } from "@/components/ProductImageInput";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore/lite";
 import {
   deleteCategory,
   deleteProduct,
@@ -56,8 +60,8 @@ export default function AdminDashboard() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [draft, setDraft] = useState<ProductDraft>(emptyDraft);
   const [colorsText, setColorsText] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const [images, setImages] = useState<EditableImage[]>([]);
+  const [colorImages, setColorImages] = useState<Record<string, EditableImage[]>>({});
   const [productBusy, setProductBusy] = useState(false);
   const [productError, setProductError] = useState("");
 
@@ -67,6 +71,8 @@ export default function AdminDashboard() {
   const [categoryIcon, setCategoryIcon] = useState("✿");
   const [categoryOrder, setCategoryOrder] = useState("1");
   const [categoryError, setCategoryError] = useState("");
+  const [categoryBusy, setCategoryBusy] = useState(false);
+  const [seedBusy, setSeedBusy] = useState(false);
 
   const refreshData = useCallback(async () => {
     setPageError("");
@@ -104,7 +110,9 @@ export default function AdminDashboard() {
 
     const firebaseAuth = auth;
     const firestore = db;
+    let revision = 0;
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+      const currentRevision = ++revision;
       setLoading(true);
       if (!user) {
         setAuthorized(false);
@@ -114,9 +122,10 @@ export default function AdminDashboard() {
       }
       try {
         const adminSnapshot = await getDoc(doc(firestore, "admins", user.uid));
+        if (currentRevision !== revision) return;
         if (!adminSnapshot.exists() || adminSnapshot.data().active !== true) {
           await signOut(firebaseAuth);
-            setAuthorized(false);
+          setAuthorized(false);
           setAuthError("Tài khoản chưa được cấp quyền. Hãy thêm document admins/{uid} với active: true trong Firestore.");
           setConnectionLabel("Không có quyền admin");
           setConnectionError(true);
@@ -126,30 +135,19 @@ export default function AdminDashboard() {
         setAuthorized(true);
         setConnectionLabel("Firebase Cloud");
         setConnectionError(false);
-        await refreshData();
+        await refreshData().catch(() => undefined);
       } catch (error) {
+        if (currentRevision !== revision) return;
         setAuthorized(false);
         setConnectionLabel("Lỗi kết nối / phân quyền");
         setConnectionError(true);
         setAuthError(error instanceof Error ? error.message : "Không thể xác minh quyền admin.");
       } finally {
-        setLoading(false);
+        if (currentRevision === revision) setLoading(false);
       }
     });
-    return () => unsubscribe();
+    return () => { revision++; unsubscribe(); };
   }, [mode, refreshData]);
-
-  useEffect(() => {
-    if (!imageFile) return;
-    const url = URL.createObjectURL(imageFile);
-    setObjectUrl(url);
-    return () => {
-      URL.revokeObjectURL(url);
-      setObjectUrl(null);
-    };
-  }, [imageFile]);
-
-  const imagePreview = objectUrl || draft.image || "";
 
   const availableCount = useMemo(() => products.filter((product) => product.inStock !== false).length, [products]);
 
@@ -173,32 +171,62 @@ export default function AdminDashboard() {
   }
 
   function openProductEditor(product?: Product) {
-    const next = product ? { ...product } : { ...emptyDraft, categoryId: categories[0]?.id ?? "" };
+    const next = product ? { ...product } : { ...emptyDraft, id: crypto.randomUUID(), categoryId: categories[0]?.id ?? "" };
     setEditingProduct(product ?? null);
     setDraft(next);
     setColorsText((product?.colors ?? []).join(", "));
-    setImageFile(null);
+    setImages((product ? productImages(product) : []).map((url) => ({ url })));
+    setColorImages(Object.fromEntries((product?.colorImages ?? []).map((entry) => [
+      entry.color, entry.images.map((url) => ({ url })),
+    ])));
     setProductError("");
     setProductModal(true);
   }
 
   async function handleProductSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (productBusy) return;
     setProductBusy(true);
     setProductError("");
     try {
       const category = categories.find((item) => item.id === draft.categoryId);
       if (!category) throw new Error("Vui lòng chọn danh mục hợp lệ.");
-      let image = String(draft.image ?? "");
-      if (imageFile) image = await uploadProductImage(imageFile, editingProduct?.id ?? "new");
-      await saveProduct({
+      validateProduct(draft);
+      const colors = [...new Set(colorsText.split(",").map((color) => color.trim()).filter(Boolean))];
+      async function resolveImages(entries: EditableImage[], onResolved: (entries: EditableImage[]) => void) {
+        const resolved = [...entries];
+        for (let index = 0; index < entries.length; index++) {
+          const entry = entries[index];
+          if (entry.file) {
+            resolved[index] = { url: await uploadProductImage(entry.file, draft.id ?? "new") };
+            onResolved([...resolved]);
+          } else {
+            validateImageUrl(entry.url);
+          }
+        }
+        return resolved.map((entry) => entry.url);
+      }
+      const productImages = await resolveImages(images, setImages);
+      const savedColorImages = [];
+      for (const color of colors) {
+        const urls = await resolveImages(colorImages[color] ?? [], (entries) => {
+          setColorImages((current) => ({ ...current, [color]: entries }));
+        });
+        savedColorImages.push({ color, images: urls });
+      }
+      const savedProduct = await saveProduct({
         ...draft,
         categoryName: category.name,
-        image,
-        colors: colorsText.split(",").map((color) => color.trim()).filter(Boolean),
+        image: productImages[0] ?? savedColorImages.flatMap((entry) => entry.images)[0] ?? "",
+        images: productImages,
+        colorImages: savedColorImages,
+        colors,
       });
       setProductModal(false);
-      await refreshData();
+      setProducts((current) => [
+        savedProduct,
+        ...current.filter((product) => product.id !== savedProduct.id),
+      ].sort((a, b) => Number(Boolean(b.featured)) - Number(Boolean(a.featured)) || (b.createdAt ?? 0) - (a.createdAt ?? 0)));
       showToast(editingProduct ? "Đã cập nhật sản phẩm." : "Đã thêm sản phẩm vào tiệm.");
     } catch (error) {
       setProductError(error instanceof Error ? error.message : "Không thể lưu sản phẩm. Kiểm tra kết nối và quyền truy cập.");
@@ -229,6 +257,8 @@ export default function AdminDashboard() {
 
   async function handleCategorySave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (categoryBusy) return;
+    setCategoryBusy(true);
     setCategoryError("");
     try {
       const saved = await saveCategory({
@@ -238,16 +268,13 @@ export default function AdminDashboard() {
         order: Number(categoryOrder),
         createdAt: editingCategory?.createdAt,
       });
-      if (editingCategory) {
-        for (const product of products.filter((item) => item.categoryId === saved.id)) {
-          await saveProduct({ ...product, categoryName: saved.name });
-        }
-      }
+      setCategories((current) => [...current.filter((category) => category.id !== saved.id), saved].sort((a, b) => (a.order ?? 999) - (b.order ?? 999)));
       setCategoryModal(false);
-      await refreshData();
       showToast(editingCategory ? "Đã cập nhật danh mục." : "Đã tạo danh mục.");
     } catch (error) {
       setCategoryError(error instanceof Error ? error.message : "Không thể lưu danh mục.");
+    } finally {
+      setCategoryBusy(false);
     }
   }
 
@@ -263,23 +290,26 @@ export default function AdminDashboard() {
   }
 
   async function handleSeed() {
-    if (!window.confirm("Thêm 4 sản phẩm minh họa và 5 danh mục từ brand kit? Hình SVG là minh họa, hãy thay ảnh thật trước khi quảng bá.")) return;
+    if (seedBusy || !window.confirm("Thêm 3 bản nháp hoa kẽm nhung và 2 danh mục? Bạn cần cập nhật giá trước khi hiển thị.")) return;
+    setSeedBusy(true);
     try {
       await seedStarterCatalog();
       await refreshData();
       showToast("Đã thêm 3 bản nháp hoa kẽm nhung. Hãy cập nhật giá trước khi hiển thị.");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Không thể nạp dữ liệu mẫu.");
+    } finally {
+      setSeedBusy(false);
     }
   }
 
   if (loading) {
-    return <main className="admin-loading"><div className="skeleton admin-loading-card" /><p>Đang kiểm tra quyền truy cập…</p></main>;
+    return <main id="main-content" className="admin-loading"><div className="skeleton admin-loading-card" /><p>Đang kiểm tra quyền truy cập…</p></main>;
   }
 
   if (!authorized) {
     return (
-      <main className="admin-login-page">
+      <main id="main-content" className="admin-login-page">
         <div className="login-card">
           <Link href="/" aria-label="Về showroom"><img className="login-brand" src="/assets/logo-horizontal.svg" alt="tho. handmade" /></Link>
           <p className="eyebrow">private workspace</p>
@@ -314,7 +344,7 @@ export default function AdminDashboard() {
         </div>
       </aside>
 
-      <main className="admin-main">
+      <main id="main-content" className="admin-main">
         <header className="admin-topbar">
           <div><p className="kicker">tho. handmade / workspace</p><h1>{activeTab === "products" ? "Sản phẩm" : "Danh mục"}</h1></div>
           <div className="topbar-actions">
@@ -324,10 +354,10 @@ export default function AdminDashboard() {
         </header>
 
         {mode === "local" ? <div className="local-warning">Đang dùng LocalStorage trên trình duyệt này. Dữ liệu chưa được đồng bộ lên Firebase và không xuất hiện trên thiết bị khác.</div> : null}
-        {pageError ? <div className="notice error" style={{ marginTop: 20 }}>{pageError}</div> : null}
+        {pageError ? <div className="notice error" role="alert" style={{ marginTop: 20 }}>{pageError} <button type="button" className="btn secondary" onClick={() => void refreshData().catch(() => undefined)}>Thử tải lại</button></div> : null}
 
         <section className="admin-stats">
-          <article className="stat-card"><span>TỔNG SẢN PHẨM</span><strong>{products.length}</strong><small>Trong showroom</small></article>
+          <article className="stat-card"><span>TỔNG SẢN PHẨM</span><strong>{products.length}</strong><small>{products.filter((product) => product.isPublished !== false).length} đang hiển thị · {products.filter((product) => product.isPublished === false).length} bản nháp</small></article>
           <article className="stat-card"><span>DANH MỤC</span><strong>{categories.length}</strong><small>Nhóm sản phẩm</small></article>
           <article className="stat-card"><span>ĐANG NHẬN LÀM</span><strong>{availableCount}</strong><small>Mẫu đang mở</small></article>
         </section>
@@ -337,7 +367,7 @@ export default function AdminDashboard() {
             <div className="panel-heading">
               <div><p className="eyebrow">catalogue</p><h2>Những món đang có ở tiệm</h2><p className="muted">Thêm ảnh thật, mức giá và màu sắc để khách dễ lựa chọn.</p></div>
               <div className="panel-buttons">
-                {!products.length ? <button className="btn secondary" type="button" onClick={handleSeed}>Thêm 3 mẫu hoa kẽm nhung</button> : null}
+                {!products.length ? <button className="btn secondary" type="button" disabled={seedBusy} onClick={handleSeed}>{seedBusy ? "Đang thêm…" : "Thêm 3 mẫu hoa kẽm nhung"}</button> : null}
                 <button className="btn" type="button" onClick={() => openProductEditor()} disabled={!categories.length}>＋ Thêm sản phẩm</button>
               </div>
             </div>
@@ -348,7 +378,7 @@ export default function AdminDashboard() {
                 <tbody>
                   {products.length ? products.map((product) => (
                     <tr key={product.id}>
-                      <td><div className="admin-product"><div className={`admin-thumb ${product.image ? "" : "placeholder"}`}>{product.image ? <img src={product.image} alt="" /> : <img src="/assets/flower-mark.svg" alt="" />}</div><div><strong>{product.name}</strong><small>{product.featured ? "Mẫu nổi bật" : product.craftDays || "Theo lịch tiệm"}</small></div></div></td>
+                      <td><div className="admin-product"><div className={`admin-thumb ${product.image ? "" : "placeholder"}`}>{product.image ? <img src={displayImage(product.image, 160)} alt="" loading="lazy" /> : <img src="/assets/flower-mark.svg" alt="" />}</div><div><strong>{product.name}</strong><small>{product.featured ? "Mẫu nổi bật" : product.craftDays || "Theo lịch tiệm"}</small></div></div></td>
                       <td>{categories.find((item) => item.id === product.categoryId)?.name || product.categoryName || "—"}</td>
                       <td>{formatPrice(product.price)}</td>
                       <td><span className={`status-tag ${product.inStock === false || product.isPublished === false ? "off" : ""}`}>{product.isPublished === false ? "Đang ẩn" : product.inStock === false ? "Tạm ngưng" : "Đang nhận làm"}</span></td>
@@ -377,72 +407,60 @@ export default function AdminDashboard() {
       </main>
 
       {productModal ? (
-        <div className="dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProductModal(false); }}>
-          <section className="editor-dialog editor-open" role="dialog" aria-modal="true" aria-labelledby="productDialogTitle">
+        <EditorDialog titleId="productDialogTitle" busy={productBusy} onClose={() => setProductModal(false)}>
             <form
               className="editor-form"
               onSubmit={handleProductSave}
               onPaste={(event) => {
-                const pastedImage = Array.from(event.clipboardData.files).find(
-                  (file) => file.type.startsWith("image/"),
-                );
-                if (!pastedImage) return;
-
+                const files = Array.from(event.clipboardData.files).filter((file) => file.type.startsWith("image/"));
+                if (!files.length || productBusy) return;
                 event.preventDefault();
-                if (!productBusy) setImageFile(pastedImage);
+                setImages((current) => [...current, ...files.map((file) => ({ url: "", file }))]);
               }}
             >
-              <div className="dialog-heading"><div><p className="eyebrow">product details</p><h2 id="productDialogTitle">{editingProduct ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm"}</h2></div><button className="icon-close" type="button" onClick={() => setProductModal(false)} aria-label="Đóng">×</button></div>
-              <div className="form-grid">
+              <div className="dialog-heading"><div><p className="eyebrow">product details</p><h2 id="productDialogTitle">{editingProduct ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm"}</h2></div><button className="icon-close" type="button" disabled={productBusy} onClick={() => setProductModal(false)} aria-label="Đóng">×</button></div>
+              <fieldset className="form-grid product-fields" disabled={productBusy}>
                 <label className="span-2">Tên sản phẩm *<input required maxLength={100} value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Bó tulip kẽm nhung hồng" /></label>
                 <label>Danh mục *<select required value={draft.categoryId} onChange={(event) => setDraft((current) => ({ ...current, categoryId: event.target.value }))}><option value="">Chọn danh mục</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-                <label>Giá bán (VNĐ) *<input required type="number" min="1" step="1000" value={draft.price || ""} onChange={(event) => setDraft((current) => ({ ...current, price: Number(event.target.value) }))} placeholder="280000" /></label>
-                <label>Giá gốc (nếu có)<input type="number" min="0" step="1000" value={draft.originalPrice ?? ""} onChange={(event) => setDraft((current) => ({ ...current, originalPrice: event.target.value ? Number(event.target.value) : null }))} placeholder="320000" /></label>
+                <label>Giá bán (VNĐ)<small>Bản nháp có thể để trống giá.</small><AmountInput required={draft.isPublished !== false} value={draft.price} onChange={(price) => setDraft((current) => ({ ...current, price: price ?? 0 }))} placeholder="280.000" /></label>
+                <label>Giá gốc (nếu có)<AmountInput value={draft.originalPrice} onChange={(originalPrice) => setDraft((current) => ({ ...current, originalPrice }))} placeholder="320.000" /></label>
                 <label>Thời gian hoàn thiện<input value={draft.craftDays ?? ""} onChange={(event) => setDraft((current) => ({ ...current, craftDays: event.target.value }))} placeholder="Có sẵn / 3 - 5 ngày" /></label>
-                <label className="span-2">
-                  Ảnh sản phẩm
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={productBusy}
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) setImageFile(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                  <small>Chọn tệp hoặc bấm Ctrl+V (⌘V trên Mac) trong biểu mẫu để dán ảnh.</small>
-                  {imageFile ? <small role="status">Ảnh đã chọn: {imageFile.name}</small> : null}
-                </label>
-                <label className="span-2">Hoặc dán link ảnh<input type="url" value={draft.image ?? ""} onChange={(event) => { setDraft((current) => ({ ...current, image: event.target.value })); setImageFile(null); }} placeholder="https://..." /></label>
-                <div className="image-preview-wrap span-2">{imagePreview ? <img src={imagePreview} alt="Xem trước ảnh sản phẩm" /> : <span>Ảnh xem trước sẽ xuất hiện ở đây.</span>}</div>
+                <ProductImageInput label="Ảnh sản phẩm" images={images} onChange={setImages} disabled={productBusy} />
                 <label className="span-2">Màu sắc có thể làm<input value={colorsText} onChange={(event) => setColorsText(event.target.value)} placeholder="Trắng sữa, Xanh sage, Hồng đất" /><small>Nhập các màu, cách nhau bằng dấu phẩy.</small></label>
+                {[...new Set(colorsText.split(",").map((color) => color.trim()).filter(Boolean))].map((color) => (
+                  <ProductImageInput
+                    key={color}
+                    label={`Ảnh màu ${color}`}
+                    images={colorImages[color] ?? []}
+                    onChange={(entries) => setColorImages((current) => ({ ...current, [color]: entries }))}
+                    disabled={productBusy}
+                  />
+                ))}
                 <label className="span-2">Mô tả ngắn *<textarea rows={2} required maxLength={220} value={draft.shortDesc} onChange={(event) => setDraft((current) => ({ ...current, shortDesc: event.target.value }))} placeholder="Bó tulip kẽm nhung hồng, gói giấy trắng và nơ voan…" /></label>
                 <label className="span-2">Mô tả chi tiết<textarea rows={4} value={draft.fullDesc ?? ""} onChange={(event) => setDraft((current) => ({ ...current, fullDesc: event.target.value }))} placeholder="Kích thước, chất liệu kẽm nhung, cách bảo quản…" /></label>
                 <label className="check-label"><input type="checkbox" checked={draft.inStock !== false} onChange={(event) => setDraft((current) => ({ ...current, inStock: event.target.checked }))} /> Đang nhận làm</label>
                 <label className="check-label"><input type="checkbox" checked={Boolean(draft.featured)} onChange={(event) => setDraft((current) => ({ ...current, featured: event.target.checked }))} /> Ghim lên đầu showroom</label>
                 <label className="check-label"><input type="checkbox" checked={draft.isPublished !== false} onChange={(event) => setDraft((current) => ({ ...current, isPublished: event.target.checked }))} /> Hiển thị trên showroom</label>
-              </div>
+              </fieldset>
               {productError ? <p className="form-message" role="alert">{productError}</p> : null}
-              <div className="dialog-actions"><button className="btn secondary" type="button" onClick={() => setProductModal(false)}>Hủy</button><button className="btn" type="submit" disabled={productBusy}>{productBusy ? "Đang lưu…" : "Lưu sản phẩm"}</button></div>
+              <div className="dialog-actions"><button className="btn secondary" type="button" disabled={productBusy} onClick={() => setProductModal(false)}>Hủy</button><button className="btn" type="submit" disabled={productBusy}>{productBusy ? "Đang lưu…" : "Lưu sản phẩm"}</button></div>
             </form>
-          </section>
-        </div>
+        </EditorDialog>
       ) : null}
 
       {categoryModal ? (
-        <div className="dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setCategoryModal(false); }}>
-          <section className="editor-dialog compact-dialog editor-open" role="dialog" aria-modal="true" aria-labelledby="categoryDialogTitle">
+        <EditorDialog titleId="categoryDialogTitle" compact busy={categoryBusy} onClose={() => setCategoryModal(false)}>
             <form className="editor-form" onSubmit={handleCategorySave}>
-              <div className="dialog-heading"><div><p className="eyebrow">collection</p><h2 id="categoryDialogTitle">{editingCategory ? "Chỉnh sửa danh mục" : "Tạo danh mục"}</h2></div><button className="icon-close" type="button" onClick={() => setCategoryModal(false)} aria-label="Đóng">×</button></div>
+              <div className="dialog-heading"><div><p className="eyebrow">collection</p><h2 id="categoryDialogTitle">{editingCategory ? "Chỉnh sửa danh mục" : "Tạo danh mục"}</h2></div><button className="icon-close" type="button" disabled={categoryBusy} onClick={() => setCategoryModal(false)} aria-label="Đóng">×</button></div>
+              <fieldset className="product-fields" disabled={categoryBusy}>
               <label>Tên danh mục<input required maxLength={60} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Ví dụ: Hoa kẽm nhung" /></label>
               <label>Biểu tượng<input maxLength={8} value={categoryIcon} onChange={(event) => setCategoryIcon(event.target.value)} /></label>
               <label>Thứ tự<input type="number" min="0" value={categoryOrder} onChange={(event) => setCategoryOrder(event.target.value)} /></label>
+              </fieldset>
               {categoryError ? <p className="form-message" role="alert">{categoryError}</p> : null}
-              <div className="dialog-actions"><button className="btn secondary" type="button" onClick={() => setCategoryModal(false)}>Hủy</button><button className="btn" type="submit">Lưu danh mục</button></div>
+              <div className="dialog-actions"><button className="btn secondary" type="button" disabled={categoryBusy} onClick={() => setCategoryModal(false)}>Hủy</button><button className="btn" type="submit" disabled={categoryBusy}>{categoryBusy ? "Đang lưu…" : "Lưu danh mục"}</button></div>
             </form>
-          </section>
-        </div>
+        </EditorDialog>
       ) : null}
 
       {toast ? <div className="admin-toast admin-toast-visible" role="status">{toast}</div> : null}

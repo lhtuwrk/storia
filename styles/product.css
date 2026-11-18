@@ -27,3 +27,9 @@
 .not-found{max-width:620px;margin:60px auto;text-align:center;padding:60px 28px;border:1px solid var(--hairline);border-radius:22px;background:var(--card)}
 .not-found img{width:48px;height:82px;object-fit:contain;margin:0 auto 20px}
 @media(max-width:760px){.product-detail-shell{grid-template-columns:1fr}.detail-photo-wrap{max-width:620px;width:100%;margin:auto}.detail-info{padding-top:0}.detail-actions .btn{flex:1}}
+
+.detail-gallery{min-width:0}
+.detail-thumbnails{display:flex;gap:10px;overflow-x:auto;margin-top:12px;padding:2px}
+.detail-thumbnails button{flex:0 0 76px;height:80px;padding:3px;border:1px solid var(--hairline);border-radius:10px;background:var(--card);overflow:hidden}
+.detail-thumbnails button[aria-pressed=true]{border:2px solid var(--espresso)}
+.detail-thumbnails img{height:100%;width:100%;object-fit:cover;border-radius:6px}

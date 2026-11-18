@@ -5,7 +5,11 @@ import {
   getDoc,
   getDocs,
   setDoc,
-} from "firebase/firestore";
+  query,
+  where,
+  writeBatch,
+  type WriteBatch,
+} from "firebase/firestore/lite";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   cloudinaryConfig,
@@ -15,6 +19,7 @@ import {
   storage,
 } from "@/lib/firebase";
 import type { Category, Product, ProductDraft } from "@/lib/types";
+import { uniqueStrings, validateImageUrl, validateProduct } from "@/lib/product";
 
 const LOCAL_KEYS = {
   products: "tho.next.products.v1",
@@ -71,25 +76,54 @@ function sortProducts(rows: Product[]) {
 export async function getCategories(): Promise<Category[]> {
   if (getDataMode() === "local") return sortCategories(readLocal<Category>(LOCAL_KEYS.categories));
   const snapshot = await getDocs(collection(db!, "categories"));
-  return sortCategories(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Category));
+  return sortCategories(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as Category));
 }
 
-export async function getProducts(): Promise<Product[]> {
-  if (getDataMode() === "local") return sortProducts(readLocal<Product>(LOCAL_KEYS.products));
-  const snapshot = await getDocs(collection(db!, "products"));
-  return sortProducts(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Product));
+export async function getProducts(publishedOnly = false): Promise<Product[]> {
+  if (getDataMode() === "local") {
+    return sortProducts(readLocal<Product>(LOCAL_KEYS.products).filter((product) => !publishedOnly || product.isPublished !== false));
+  }
+  const products = collection(db!, "products");
+  const snapshot = await getDocs(publishedOnly ? query(products, where("isPublished", "==", true)) : products);
+  return sortProducts(snapshot.docs.map((item) => ({ ...item.data(), id: item.id }) as Product));
 }
 
 export async function getProduct(id: string): Promise<Product | null> {
   if (getDataMode() === "local") return readLocal<Product>(LOCAL_KEYS.products).find((item) => item.id === id) ?? null;
   const snapshot = await getDoc(doc(db!, "products", id));
-  return snapshot.exists() ? ({ id: snapshot.id, ...snapshot.data() } as Product) : null;
+  return snapshot.exists() ? ({ ...snapshot.data(), id: snapshot.id } as Product) : null;
 }
 
-export async function saveCategory(input: Partial<Category> & Pick<Category, "name">): Promise<Category> {
+let catalogCache: { expires: number; promise: Promise<{ products: Product[]; categories: Category[] }> } | null = null;
+
+export function getCatalog() {
+  if (catalogCache && catalogCache.expires > Date.now()) return catalogCache.promise;
+  const promise = Promise.all([getProducts(true), getCategories()])
+    .then(([products, categories]) => ({
+      products: products.filter((product) => product.isPublished !== false).map((product) => ({
+        ...product,
+        categoryName: categories.find((category) => category.id === product.categoryId)?.name || product.categoryName,
+      })),
+      categories,
+    }))
+    .catch((error: unknown) => {
+      catalogCache = null;
+      throw error;
+    });
+  catalogCache = { expires: Date.now() + 30_000, promise };
+  return promise;
+}
+
+export async function saveCategory(input: Partial<Category> & Pick<Category, "name">, batch?: WriteBatch): Promise<Category> {
   const name = input.name.trim();
   if (!name) throw new Error("Vui lòng nhập tên danh mục.");
-  const id = input.id || slugify(name);
+  if (name.length > 60) throw new Error("Tên danh mục tối đa 60 ký tự.");
+  if (!Number.isSafeInteger(Number(input.order ?? 99)) || Number(input.order ?? 99) < 0) throw new Error("Thứ tự danh mục phải là số nguyên từ 0 trở lên.");
+  const existing = await getCategories();
+  if (existing.some((category) => category.id !== input.id && category.name.trim().toLocaleLowerCase("vi") === name.toLocaleLowerCase("vi"))) {
+    throw new Error("Tên danh mục đã tồn tại.");
+  }
+  const id = input.id || `${slugify(name)}-${crypto.randomUUID()}`;
   const record: Category = {
     id,
     name,
@@ -103,12 +137,15 @@ export async function saveCategory(input: Partial<Category> & Pick<Category, "na
       ? rows.map((row) => (row.id === id ? record : row))
       : [...rows, record]);
   } else {
-    await setDoc(doc(db!, "categories", id), record, { merge: true });
+    if (batch) batch.set(doc(db!, "categories", id), record, { merge: true });
+    else await setDoc(doc(db!, "categories", id), record, { merge: true });
   }
+  catalogCache = null;
   return record;
 }
 
 export async function deleteCategory(id: string) {
+  catalogCache = null;
   const products = await getProducts();
   if (products.some((product) => product.categoryId === id)) {
     throw new Error("Danh mục vẫn có sản phẩm. Hãy chuyển các sản phẩm trước khi xóa.");
@@ -120,18 +157,28 @@ export async function deleteCategory(id: string) {
   }
 }
 
-export async function saveProduct(input: ProductDraft): Promise<Product> {
-  const id = input.id || `prod-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+export async function saveProduct(input: ProductDraft, batch?: WriteBatch): Promise<Product> {
+  validateProduct(input);
+  const id = input.id || crypto.randomUUID();
+  const colors = uniqueStrings(input.colors);
+  const colorImages = colors.map((color) => ({
+    color,
+    images: uniqueStrings(input.colorImages?.find((entry) => entry.color === color)?.images),
+  }));
+  const images = uniqueStrings(input.images ?? (input.image ? [input.image] : []));
+  const image = images[0] ?? colorImages.flatMap((entry) => entry.images)[0] ?? "";
+  [...images, ...colorImages.flatMap((entry) => entry.images)].forEach(validateImageUrl);
   const record: Product = {
-    ...input,
     id,
     name: String(input.name ?? "").trim(),
     categoryId: String(input.categoryId ?? ""),
     categoryName: String(input.categoryName ?? ""),
     price: Math.max(0, Math.round(Number(input.price) || 0)),
     originalPrice: input.originalPrice ? Math.max(0, Math.round(Number(input.originalPrice))) : null,
-    image: String(input.image ?? ""),
-    colors: Array.isArray(input.colors) ? input.colors : [],
+    image,
+    images,
+    colorImages,
+    colors,
     craftDays: String(input.craftDays || "Đang cập nhật"),
     shortDesc: String(input.shortDesc ?? "").trim(),
     fullDesc: String(input.fullDesc ?? "").trim(),
@@ -141,8 +188,8 @@ export async function saveProduct(input: ProductDraft): Promise<Product> {
     createdAt: input.createdAt ?? Date.now(),
     updatedAt: Date.now(),
   };
-  if (!record.name || !record.categoryId || (record.isPublished && !record.price) || !record.shortDesc) {
-    throw new Error("Tên, danh mục, giá và mô tả ngắn là thông tin bắt buộc.");
+  if (new TextEncoder().encode(JSON.stringify(record)).length > 900_000) {
+    throw new Error("Dữ liệu ảnh quá lớn để lưu. Hãy dùng ảnh từ Cloudinary hoặc Firebase Storage.");
   }
   if (getDataMode() === "local") {
     const rows = readLocal<Product>(LOCAL_KEYS.products);
@@ -150,12 +197,15 @@ export async function saveProduct(input: ProductDraft): Promise<Product> {
       ? rows.map((row) => (row.id === id ? record : row))
       : [record, ...rows]);
   } else {
-    await setDoc(doc(db!, "products", id), record, { merge: true });
+    if (batch) batch.set(doc(db!, "products", id), record, { merge: true });
+    else await setDoc(doc(db!, "products", id), record, { merge: true });
   }
+  catalogCache = null;
   return record;
 }
 
 export async function deleteProduct(id: string) {
+  catalogCache = null;
   if (getDataMode() === "local") {
     writeLocal(LOCAL_KEYS.products, readLocal<Product>(LOCAL_KEYS.products).filter((row) => row.id !== id));
   } else {
@@ -165,6 +215,9 @@ export async function deleteProduct(id: string) {
 
 export async function uploadProductImage(file: File, productId = "new"): Promise<string> {
   if (!file.type.startsWith("image/")) throw new Error("Vui lòng chọn tệp hình ảnh.");
+  if (getDataMode() === "cloud" && !isCloudinaryConfigured && !storage) {
+    throw new Error("Chưa cấu hình nơi lưu ảnh. Hãy cấu hình Cloudinary hoặc Firebase Storage, hoặc dán link ảnh.");
+  }
   const blob = await compressImage(file);
 
   // 1. Tải lên Cloudinary nếu có cấu hình (Miễn phí 25GB, không cần thẻ)
@@ -179,6 +232,7 @@ export async function uploadProductImage(file: File, productId = "new"): Promise
       {
         method: "POST",
         body: formData,
+        signal: AbortSignal.timeout(30_000),
       }
     );
 
@@ -190,6 +244,7 @@ export async function uploadProductImage(file: File, productId = "new"): Promise
     }
 
     const result = await response.json();
+    if (!result.secure_url) throw new Error("Cloudinary chưa trả về link ảnh. Vui lòng thử lại.");
     return result.secure_url;
   }
 
@@ -278,9 +333,17 @@ export async function seedStarterCatalog() {
   const categories = await getCategories();
   const products = await getProducts();
   if (products.length) throw new Error("Chỉ có thể nạp mẫu khi danh sách sản phẩm đang trống.");
-  const existingIds = new Set(categories.map((item) => item.id));
+  const batch = getDataMode() === "cloud" ? writeBatch(db!) : undefined;
+  const categoryIds = new Map<string, string>();
   for (const category of starterCategories) {
-    if (!existingIds.has(category.id)) await saveCategory(category);
+    const existing = categories.find((item) =>
+      item.id === category.id || item.name.trim().toLocaleLowerCase("vi") === category.name.toLocaleLowerCase("vi"));
+    categoryIds.set(category.id, existing?.id ?? category.id);
+    if (!existing) await saveCategory(category, batch);
   }
-  for (const product of starterProducts) await saveProduct(product);
+  for (const product of starterProducts) {
+    await saveProduct({ ...product, categoryId: categoryIds.get(product.categoryId) ?? product.categoryId }, batch);
+  }
+  if (batch) await batch.commit();
+  catalogCache = null;
 }

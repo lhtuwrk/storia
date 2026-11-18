@@ -33,3 +33,23 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .admin-shell { background: #eee8df; }
 .detail-skeleton { min-height: 460px; border-radius: 22px; }
 @media (max-width: 760px) { .detail-skeleton { min-height: 300px; } }
+
+.skip-link{position:fixed;top:8px;left:12px;z-index:200;transform:translateY(-150%);padding:10px 16px;background:var(--espresso);color:var(--white);border-radius:8px}
+.skip-link:focus{transform:none}
+button:disabled{cursor:default}
+.empty-state .btn,.empty-state .text-link{margin:16px 6px 0}
+.catalog-search{display:grid;gap:5px;font-size:12px;color:var(--cocoa);width:100%}
+.catalog-search input{width:100%;max-width:400px;padding:11px 14px;border:1px solid var(--hairline);border-radius:10px;background:var(--white);color:var(--espresso)}
+.editor-dialog{max-height:calc(100dvh - 32px)}
+.editor-form{max-height:calc(100dvh - 34px)}
+.dialog-actions{position:sticky;bottom:-1px;background:var(--paper);padding-bottom:8px;z-index:2}
+.image-link-row{flex-wrap:wrap}
+.image-link-row input{flex:1 1 180px}
+.image-editor-item{overflow-wrap:anywhere}
+@media(max-width:560px){
+  .detail-actions{align-items:stretch}
+  .detail-actions .btn{width:100%;white-space:normal}
+  .editor-dialog{width:calc(100% - 16px);max-height:calc(100dvh - 16px)}
+  .editor-form{padding:18px;max-height:calc(100dvh - 18px)}
+  .dialog-actions .btn{min-height:44px}
+}

@@ -14,6 +14,8 @@ export type Product = {
   price: number;
   originalPrice?: number | null;
   image?: string;
+  images?: string[];
+  colorImages?: { color: string; images: string[] }[];
   colors?: string[];
   craftDays?: string;
   shortDesc: string;

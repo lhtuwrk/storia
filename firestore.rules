@@ -7,9 +7,9 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.active == true;
     }
 
-    // Public storefront: anyone may view the catalogue.
+    // Published products are public. Admins can also read drafts.
     match /products/{productId} {
-      allow read: if true;
+      allow read: if resource.data.get("isPublished", false) == true || isActiveAdmin();
       allow create, update, delete: if isActiveAdmin();
     }
 

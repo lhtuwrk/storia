@@ -1,6 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore/lite";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -26,7 +26,7 @@ const firebaseApp = isFirebaseConfigured
     : initializeApp(firebaseConfig)
   : null;
 
-export const auth = firebaseApp ? getAuth(firebaseApp) : null;
+export const auth = firebaseApp && typeof window !== "undefined" ? getAuth(firebaseApp) : null;
 export const db = firebaseApp ? getFirestore(firebaseApp) : null;
 export const storage = firebaseApp && firebaseConfig.storageBucket ? getStorage(firebaseApp) : null;
 
@@ -39,7 +39,16 @@ export const isCloudinaryConfigured = Boolean(
   cloudinaryConfig.cloudName && cloudinaryConfig.uploadPreset
 );
 
+function contactUrl(value: string | undefined) {
+  try {
+    const url = new URL(value?.trim() ?? "");
+    return ["https:", "http:"].includes(url.protocol) ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 export const contactConfig = {
-  facebookMessengerUrl: process.env.NEXT_PUBLIC_FACEBOOK_MESSENGER_URL ?? "",
-  zaloUrl: process.env.NEXT_PUBLIC_ZALO_URL ?? "",
+  facebookMessengerUrl: contactUrl(process.env.NEXT_PUBLIC_FACEBOOK_MESSENGER_URL),
+  zaloUrl: contactUrl(process.env.NEXT_PUBLIC_ZALO_URL),
 };
