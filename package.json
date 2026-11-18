@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "build:cf": "opennextjs-cloudflare",
-    "preview:cf": "opennextjs-cloudflare && wrangler dev",
-    "deploy:cf": "opennextjs-cloudflare && wrangler deploy"
+    "build:cf": "opennextjs-cloudflare build",
+    "preview:cf": "npm run build:cf && opennextjs-cloudflare preview",
+    "deploy:cf": "npm run build:cf && opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "firebase": "^12.19.0",
@@ -18,12 +18,14 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.17",
     "@types/node": "^22.19.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint": "^10.15.0",
     "eslint-config-next": "16.4.6",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wrangler": "4.164.0"
   },
   "overrides": {
     "@grpc/grpc-js": "^1.13.6"
