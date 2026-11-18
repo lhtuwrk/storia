@@ -87,7 +87,7 @@ export default function ProductDetails({ id }: { id: string }) {
               {product.fullDesc ? <p className="detail-full">{product.fullDesc}</p> : null}
               {product.colors?.length ? (
                 <div className="detail-colors">
-                  <span className="detail-label">Màu len có thể chọn</span>
+                  <span className="detail-label">Màu sắc có thể chọn</span>
                   <div className="color-list">
                     {product.colors.map((color) => (
                       <button
@@ -101,7 +101,7 @@ export default function ProductDetails({ id }: { id: string }) {
                       </button>
                     ))}
                   </div>
-                  <p className="detail-note">Màu hiển thị trên màn hình mang tính tham khảo; màu len thực tế có thể chênh lệch nhẹ.</p>
+                  <p className="detail-note">Màu hiển thị trên màn hình mang tính tham khảo; màu sản phẩm thực tế có thể chênh lệch nhẹ.</p>
                 </div>
               ) : null}
               <div className="detail-actions">

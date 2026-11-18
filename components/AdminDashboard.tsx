@@ -267,7 +267,7 @@ export default function AdminDashboard() {
     try {
       await seedStarterCatalog();
       await refreshData();
-      showToast("Đã thêm dữ liệu mẫu. Hãy thay ảnh SVG bằng ảnh chụp thật.");
+      showToast("Đã thêm 3 bản nháp hoa kẽm nhung. Hãy cập nhật giá trước khi hiển thị.");
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Không thể nạp dữ liệu mẫu.");
     }
@@ -335,9 +335,9 @@ export default function AdminDashboard() {
         {activeTab === "products" ? (
           <section className="admin-panel">
             <div className="panel-heading">
-              <div><p className="eyebrow">catalogue</p><h2>Những món đang có ở tiệm</h2><p className="muted">Thêm ảnh thật, mức giá và màu len để khách dễ lựa chọn.</p></div>
+              <div><p className="eyebrow">catalogue</p><h2>Những món đang có ở tiệm</h2><p className="muted">Thêm ảnh thật, mức giá và màu sắc để khách dễ lựa chọn.</p></div>
               <div className="panel-buttons">
-                {!products.length ? <button className="btn secondary" type="button" onClick={handleSeed}>Thêm 4 mẫu từ brand kit</button> : null}
+                {!products.length ? <button className="btn secondary" type="button" onClick={handleSeed}>Thêm 3 mẫu hoa kẽm nhung</button> : null}
                 <button className="btn" type="button" onClick={() => openProductEditor()} disabled={!categories.length}>＋ Thêm sản phẩm</button>
               </div>
             </div>
@@ -379,20 +379,46 @@ export default function AdminDashboard() {
       {productModal ? (
         <div className="dialog-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setProductModal(false); }}>
           <section className="editor-dialog editor-open" role="dialog" aria-modal="true" aria-labelledby="productDialogTitle">
-            <form className="editor-form" onSubmit={handleProductSave}>
+            <form
+              className="editor-form"
+              onSubmit={handleProductSave}
+              onPaste={(event) => {
+                const pastedImage = Array.from(event.clipboardData.files).find(
+                  (file) => file.type.startsWith("image/"),
+                );
+                if (!pastedImage) return;
+
+                event.preventDefault();
+                if (!productBusy) setImageFile(pastedImage);
+              }}
+            >
               <div className="dialog-heading"><div><p className="eyebrow">product details</p><h2 id="productDialogTitle">{editingProduct ? "Chỉnh sửa sản phẩm" : "Thêm sản phẩm"}</h2></div><button className="icon-close" type="button" onClick={() => setProductModal(false)} aria-label="Đóng">×</button></div>
               <div className="form-grid">
-                <label className="span-2">Tên sản phẩm *<input required maxLength={100} value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Túi len hoa cúc đeo vai" /></label>
+                <label className="span-2">Tên sản phẩm *<input required maxLength={100} value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Bó tulip kẽm nhung hồng" /></label>
                 <label>Danh mục *<select required value={draft.categoryId} onChange={(event) => setDraft((current) => ({ ...current, categoryId: event.target.value }))}><option value="">Chọn danh mục</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
                 <label>Giá bán (VNĐ) *<input required type="number" min="1" step="1000" value={draft.price || ""} onChange={(event) => setDraft((current) => ({ ...current, price: Number(event.target.value) }))} placeholder="280000" /></label>
                 <label>Giá gốc (nếu có)<input type="number" min="0" step="1000" value={draft.originalPrice ?? ""} onChange={(event) => setDraft((current) => ({ ...current, originalPrice: event.target.value ? Number(event.target.value) : null }))} placeholder="320000" /></label>
                 <label>Thời gian hoàn thiện<input value={draft.craftDays ?? ""} onChange={(event) => setDraft((current) => ({ ...current, craftDays: event.target.value }))} placeholder="Có sẵn / 3 - 5 ngày" /></label>
-                <label className="span-2">Tải ảnh sản phẩm<input type="file" accept="image/*" onChange={(event) => setImageFile(event.target.files?.[0] ?? null)} /><small>Ảnh sẽ được nén trước khi lưu; nên dùng ảnh chụp thật.</small></label>
-                <label className="span-2">Hoặc URL ảnh<input type="url" value={draft.image ?? ""} onChange={(event) => { setDraft((current) => ({ ...current, image: event.target.value })); setImageFile(null); }} placeholder="https://..." /></label>
+                <label className="span-2">
+                  Ảnh sản phẩm
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={productBusy}
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) setImageFile(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <small>Chọn tệp hoặc bấm Ctrl+V (⌘V trên Mac) trong biểu mẫu để dán ảnh.</small>
+                  {imageFile ? <small role="status">Ảnh đã chọn: {imageFile.name}</small> : null}
+                </label>
+                <label className="span-2">Hoặc dán link ảnh<input type="url" value={draft.image ?? ""} onChange={(event) => { setDraft((current) => ({ ...current, image: event.target.value })); setImageFile(null); }} placeholder="https://..." /></label>
                 <div className="image-preview-wrap span-2">{imagePreview ? <img src={imagePreview} alt="Xem trước ảnh sản phẩm" /> : <span>Ảnh xem trước sẽ xuất hiện ở đây.</span>}</div>
-                <label className="span-2">Màu len có thể làm<input value={colorsText} onChange={(event) => setColorsText(event.target.value)} placeholder="Trắng sữa, Xanh sage, Hồng đất" /><small>Nhập các màu, cách nhau bằng dấu phẩy.</small></label>
-                <label className="span-2">Mô tả ngắn *<textarea rows={2} required maxLength={220} value={draft.shortDesc} onChange={(event) => setDraft((current) => ({ ...current, shortDesc: event.target.value }))} placeholder="Một chiếc túi nhỏ nhẹ, có lót vải bên trong…" /></label>
-                <label className="span-2">Mô tả chi tiết<textarea rows={4} value={draft.fullDesc ?? ""} onChange={(event) => setDraft((current) => ({ ...current, fullDesc: event.target.value }))} placeholder="Kích thước, chất liệu len, cách bảo quản…" /></label>
+                <label className="span-2">Màu sắc có thể làm<input value={colorsText} onChange={(event) => setColorsText(event.target.value)} placeholder="Trắng sữa, Xanh sage, Hồng đất" /><small>Nhập các màu, cách nhau bằng dấu phẩy.</small></label>
+                <label className="span-2">Mô tả ngắn *<textarea rows={2} required maxLength={220} value={draft.shortDesc} onChange={(event) => setDraft((current) => ({ ...current, shortDesc: event.target.value }))} placeholder="Bó tulip kẽm nhung hồng, gói giấy trắng và nơ voan…" /></label>
+                <label className="span-2">Mô tả chi tiết<textarea rows={4} value={draft.fullDesc ?? ""} onChange={(event) => setDraft((current) => ({ ...current, fullDesc: event.target.value }))} placeholder="Kích thước, chất liệu kẽm nhung, cách bảo quản…" /></label>
                 <label className="check-label"><input type="checkbox" checked={draft.inStock !== false} onChange={(event) => setDraft((current) => ({ ...current, inStock: event.target.checked }))} /> Đang nhận làm</label>
                 <label className="check-label"><input type="checkbox" checked={Boolean(draft.featured)} onChange={(event) => setDraft((current) => ({ ...current, featured: event.target.checked }))} /> Ghim lên đầu showroom</label>
                 <label className="check-label"><input type="checkbox" checked={draft.isPublished !== false} onChange={(event) => setDraft((current) => ({ ...current, isPublished: event.target.checked }))} /> Hiển thị trên showroom</label>
@@ -409,7 +435,7 @@ export default function AdminDashboard() {
           <section className="editor-dialog compact-dialog editor-open" role="dialog" aria-modal="true" aria-labelledby="categoryDialogTitle">
             <form className="editor-form" onSubmit={handleCategorySave}>
               <div className="dialog-heading"><div><p className="eyebrow">collection</p><h2 id="categoryDialogTitle">{editingCategory ? "Chỉnh sửa danh mục" : "Tạo danh mục"}</h2></div><button className="icon-close" type="button" onClick={() => setCategoryModal(false)} aria-label="Đóng">×</button></div>
-              <label>Tên danh mục<input required maxLength={60} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Ví dụ: Túi len đeo vai" /></label>
+              <label>Tên danh mục<input required maxLength={60} value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Ví dụ: Hoa kẽm nhung" /></label>
               <label>Biểu tượng<input maxLength={8} value={categoryIcon} onChange={(event) => setCategoryIcon(event.target.value)} /></label>
               <label>Thứ tự<input type="number" min="0" value={categoryOrder} onChange={(event) => setCategoryOrder(event.target.value)} /></label>
               {categoryError ? <p className="form-message" role="alert">{categoryError}</p> : null}

@@ -141,7 +141,7 @@ export async function saveProduct(input: ProductDraft): Promise<Product> {
     createdAt: input.createdAt ?? Date.now(),
     updatedAt: Date.now(),
   };
-  if (!record.name || !record.categoryId || !record.price || !record.shortDesc) {
+  if (!record.name || !record.categoryId || (record.isPublished && !record.price) || !record.shortDesc) {
     throw new Error("Tên, danh mục, giá và mô tả ngắn là thông tin bắt buộc.");
   }
   if (getDataMode() === "local") {
@@ -240,41 +240,37 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 export const starterCategories: Category[] = [
-  { id: "tui-len", name: "Túi len", icon: "👜", order: 1 },
-  { id: "hoa-len", name: "Hoa len", icon: "🌸", order: 2 },
-  { id: "moc-khoa", name: "Móc khóa", icon: "✨", order: 3 },
-  { id: "do-trang-tri", name: "Đồ trang trí", icon: "🧶", order: 4 },
-  { id: "qua-tang", name: "Quà tặng", icon: "🎁", order: 5 },
+  { id: "hoa-kem-nhung", name: "Hoa kẽm nhung", icon: "🌸", order: 1 },
+  { id: "qua-tang", name: "Quà tặng", icon: "🎁", order: 2 },
 ];
 
 export const starterProducts: ProductDraft[] = [
   {
-    id: "tui-len-moc-tay", name: "Túi len móc tay", categoryId: "tui-len", categoryName: "Túi len",
-    price: 280000, image: "/assets/product-tui-len.svg", colors: ["Trắng kem", "Xanh sage", "Nâu be"],
-    craftDays: "Liên hệ tiệm", shortDesc: "Đeo vai, lót vải bên trong. Sáu màu len.",
-    fullDesc: "Hình trong brand kit là minh họa nhận diện. Hãy thay bằng ảnh chụp sản phẩm thật trước khi quảng bá.",
-    inStock: true, featured: true,
+    id: "bo-hong-do-nhung", name: "Bó hồng đỏ nhung",
+    categoryId: "hoa-kem-nhung", categoryName: "Hoa kẽm nhung",
+    price: 0, image: "/assets/photos/tho-bo-hoa-do.jpg", colors: ["Đỏ đô", "Trắng"],
+    craftDays: "Liên hệ tiệm",
+    shortDesc: "Hồng, lily và hoa nhí kẽm nhung đỏ đô điểm ngọc trai, xen lily trắng.",
+    fullDesc: "Bó hoa kẽm nhung gói giấy đen và ruy băng voan trắng. Nhắn tiệm để trao đổi màu hoa, kích thước và lời nhắn trên thiệp.",
+    inStock: true, featured: true, isPublished: false,
   },
   {
-    id: "bo-hoa-len-nho", name: "Bó hoa len nhỏ", categoryId: "hoa-len", categoryName: "Hoa len",
-    price: 150000, image: "/assets/product-hoa-len.svg", colors: ["Hồng phấn", "Vàng bơ", "Trắng"],
-    craftDays: "Liên hệ tiệm", shortDesc: "Năm cành, không bao giờ héo. Gói sẵn giấy lụa.",
-    fullDesc: "Hình trong brand kit là minh họa nhận diện. Hãy thay bằng ảnh chụp sản phẩm thật trước khi quảng bá.",
-    inStock: true, featured: false,
+    id: "bo-tulip-hong", name: "Bó tulip hồng",
+    categoryId: "hoa-kem-nhung", categoryName: "Hoa kẽm nhung",
+    price: 0, image: "/assets/photos/tho-bo-tulip-hong.jpg", colors: ["Hồng", "Trắng"],
+    craftDays: "Liên hệ tiệm",
+    shortDesc: "Tulip kẽm nhung hồng xen cúc trắng nhụy vàng, gói giấy trắng và nơ voan hồng.",
+    fullDesc: "Một bó hoa kẽm nhung làm thủ công, gắn thiệp tho. handmade. Nhắn tiệm để trao đổi màu sắc và lời nhắn tặng người nhận.",
+    inStock: true, featured: false, isPublished: false,
   },
   {
-    id: "moc-khoa-bong-hoa", name: "Móc khóa bông hoa", categoryId: "moc-khoa", categoryName: "Móc khóa",
-    price: 45000, image: "/assets/product-moc-khoa.svg", colors: ["Hồng", "Vàng", "Trắng"],
-    craftDays: "Liên hệ tiệm", shortDesc: "Quà nhỏ cho bạn thân, kèm thiệp viết tay.",
-    fullDesc: "Hình trong brand kit là minh họa nhận diện. Hãy thay bằng ảnh chụp sản phẩm thật trước khi quảng bá.",
-    inStock: true, featured: false,
-  },
-  {
-    id: "lot-coc-ren-tron", name: "Lót cốc ren tròn", categoryId: "do-trang-tri", categoryName: "Đồ trang trí",
-    price: 90000, image: "/assets/product-lot-coc.svg", colors: ["Kem", "Nâu", "Sage"],
-    craftDays: "Liên hệ tiệm", shortDesc: "Bộ hai chiếc, sợi cotton, giặt được.",
-    fullDesc: "Hình trong brand kit là minh họa nhận diện. Hãy thay bằng ảnh chụp sản phẩm thật trước khi quảng bá.",
-    inStock: true, featured: false,
+    id: "bo-lily-hong", name: "Bó lily hồng",
+    categoryId: "hoa-kem-nhung", categoryName: "Hoa kẽm nhung",
+    price: 0, image: "/assets/photos/tho-bo-ly-hong.jpg", colors: ["Hồng", "Trắng", "Cam đào"],
+    craftDays: "Liên hệ tiệm",
+    shortDesc: "Lily kẽm nhung hồng viền trắng cùng tulip, gói giấy cam đào viền ngọc trai.",
+    fullDesc: "Bó hoa kẽm nhung phối lily, tulip và hoa đào nhỏ, dán nhãn tròn tho. handmade. Liên hệ tiệm để chọn màu và kích thước.",
+    inStock: true, featured: false, isPublished: false,
   },
 ];
 

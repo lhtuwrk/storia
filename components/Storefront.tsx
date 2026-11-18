@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
 import ProductCard from "@/components/ProductCard";
@@ -13,6 +13,24 @@ export default function Storefront() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const mainRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    if (!mainRef.current || !("IntersectionObserver" in window)) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        entry.target.classList.add("showroom-revealed");
+        observer.unobserve(entry.target);
+      }
+    });
+
+    mainRef.current.querySelectorAll("[data-showroom-reveal]").forEach(
+      (element) => observer.observe(element),
+    );
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -36,15 +54,18 @@ export default function Storefront() {
 
   return (
     <>
-      <SiteHeader />
-      <main>
+      <SiteHeader onShowroom />
+      <main id="top" ref={mainRef}>
         <section className="hero">
           <div className="container hero-grid">
             <div className="hero-copy">
               <p className="eyebrow">made slowly, made with love</p>
               <p className="kicker">A LITTLE HANDMADE CORNER</p>
-              <h1>Những điều nhỏ,<br /><em>được làm bằng tay.</em></h1>
-              <p className="hero-lede">Từng mũi len được móc chậm rãi, để mỗi món đồ mang theo một chút ấm áp riêng.</p>
+              <h1 className="hero-title">
+                <span><span>Những điều nhỏ,</span></span>
+                <span><em>được làm bằng tay.</em></span>
+              </h1>
+              <p className="hero-lede">Từng cánh hoa kẽm nhung được uốn bằng tay, gửi gắm sự chăm chút trong mỗi món quà nhỏ.</p>
               <div className="hero-actions">
                 <a className="btn" href="#products">Khám phá sản phẩm <span aria-hidden="true">↗</span></a>
                 <a className="btn secondary" href="#story">Câu chuyện của tiệm</a>
@@ -60,9 +81,9 @@ export default function Storefront() {
 
         <section className="section" id="products">
           <div className="container">
-            <div className="section-head">
+            <div className="section-head" data-showroom-reveal>
               <div><p className="eyebrow">the little collection</p><h2>Đang có ở tiệm</h2></div>
-              <p>Mỗi sản phẩm là một món nhỏ được chăm chút từ màu len đến từng đường móc.</p>
+              <p>Những bó hoa kẽm nhung được phối màu và gói ghém bằng tay, dành cho những dịp thật riêng.</p>
             </div>
             <div className="product-toolbar">
               <div className="category-list" aria-label="Lọc theo danh mục">
@@ -90,7 +111,7 @@ export default function Storefront() {
                 <div className="empty-state">
                   <img className="brand-mark" src="/assets/flower-mark.svg" alt="" />
                   <h3>{products.length ? "Chưa có mẫu trong danh mục này" : "Tiệm đang chuẩn bị những mẫu đầu tiên"}</h3>
-                  <p>{products.length ? "Bạn thử chọn một danh mục khác nhé." : "Những món đồ len mới sẽ được cập nhật tại đây. Hẹn bạn ghé lại."}</p>
+                  <p>{products.length ? "Bạn thử chọn một danh mục khác nhé." : "Những mẫu hoa kẽm nhung mới sẽ được cập nhật tại đây. Hẹn bạn ghé lại."}</p>
                 </div>
               )}
             </div>
@@ -98,21 +119,21 @@ export default function Storefront() {
         </section>
 
         <section className="section" id="story">
-          <div className="container story-band">
+          <div className="container story-band" data-showroom-reveal>
             <div className="story-art"><img src="/assets/flower-sprig.svg" alt="Họa tiết hoa nét vẽ tay" /></div>
             <div>
               <p className="eyebrow">a note from the maker</p>
-              <h2>Một chút dịu dàng,<br />trong từng mũi móc.</h2>
-              <p>tho. handmade là góc nhỏ dành cho những món đồ len được làm thủ công. Tiệm tin rằng những điều giản dị, khi được làm bằng sự chăm chút, cũng có thể trở thành món quà thật đặc biệt.</p>
+              <h2>Một chút dịu dàng,<br />trong từng cánh hoa.</h2>
+              <p>tho. handmade là góc nhỏ dành cho hoa và những món quà từ kẽm nhung được làm thủ công. Tiệm tin rằng những điều giản dị, khi được làm bằng sự chăm chút, cũng có thể trở thành món quà thật đặc biệt.</p>
               <img className="story-heart" src="/assets/heart-outline.svg" alt="" />
             </div>
           </div>
         </section>
 
         <section className="section" id="contact">
-          <div className="container section-head contact-panel">
+          <div className="container section-head contact-panel" data-showroom-reveal>
             <div><p className="eyebrow">say hello</p><h2>Bạn đang tìm một món quà nhỏ?</h2></div>
-            <p>Chọn mẫu bạn thích rồi nhắn tiệm để trao đổi thêm về màu len, kích thước và thời gian hoàn thiện nhé.</p>
+            <p>Chọn mẫu bạn thích rồi nhắn tiệm để trao đổi thêm về màu hoa, kích thước và thời gian hoàn thiện nhé.</p>
           </div>
         </section>
       </main>

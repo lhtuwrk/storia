@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     default: "tho. handmade — Những điều nhỏ được làm bằng tay",
     template: "%s · tho. handmade",
   },
-  description: "Showroom những món đồ len móc tay của tho. handmade. Mỗi sản phẩm được làm thủ công với sự dịu dàng và chăm chút.",
+  description: "Showroom hoa kẽm nhung và quà tặng handmade của tho. handmade. Mỗi sản phẩm được làm thủ công với sự dịu dàng và chăm chút.",
   applicationName: "tho. handmade",
   icons: { icon: "/assets/flower-mark.svg" },
 };

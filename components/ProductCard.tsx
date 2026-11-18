@@ -19,7 +19,7 @@ export default function ProductCard({ product, index = 0 }: { product: Product; 
         )}
         <span className="product-badge">{badge}</span>
       </Link>
-      <div className="product-meta"><span>{product.categoryName || "tho. handmade"}</span><span>móc tay</span></div>
+      <div className="product-meta"><span>{product.categoryName || "tho. handmade"}</span><span>làm thủ công</span></div>
       <Link className="product-title" href={`/products/${encodeURIComponent(product.id)}`}>{product.name}</Link>
       <div className="product-bottom">
         <span className="product-price">{formatPrice(product.price)}</span>
